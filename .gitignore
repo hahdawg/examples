@@ -120,3 +120,4 @@ notebooks/checkpoints/
 *.swp
 *.hdf
 *.backup
+*.tmp
