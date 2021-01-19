@@ -2,6 +2,7 @@ import logging
 import logging.config
 
 from . import auxillary as aux
+from . import config
 
 
 def init_logging():
@@ -22,13 +23,16 @@ def init_logging():
             "console": {
                 "level": "INFO",
                 "class": "logging.StreamHandler"
+            },
+            "file": {
+                "level": "INFO",
+                "class": "logging.FileHandler",
+                "filename": config.log_path
             }
+
         },
         "loggers": {
-            "": {  # This is the root logger.
-                    "handlers": ["console"],
-                    "level": "INFO"
-                }
+            "": {"handlers": ["console", "file"], "level": "INFO"}  # This is the root logger
         }
     }
     logging.config.dictConfig(logging_config)
