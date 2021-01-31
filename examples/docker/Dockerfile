@@ -1,71 +1,60 @@
+# To build:
+# >>> docker build -t <<image name>> -f Dockerfile ./
+#
+# To run:
+# >>> docker run it --name <<container name>> --net=host -v <<host mnt dir>>:<<container mnt dir>>
 FROM ubuntu:18.04
 
-# Adds metadata to the image as a key value pair example LABEL version="1.0"
+# Don't prompt y for apt-get
+RUN echo "APT::Get::Assume-Yes \"true\";" >> /etc/apt/apt.conf.d/90forceyes
 
-##Set environment variables
-ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+# Install ubuntu stuff
+RUN apt-get update && apt-get install -y \
+    curl \
+    htop \
+    git \
+    python3-dev \
+    python-pip \
+    python-setuptools \
+    python-virtualenv \
+    software-properties-common \
+    sudo \
+    tmux \
+    wget && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists
 
-
-
-# Set environmental variable within container
 WORKDIR /ds
-ENV HOME=/ds
-
-# Working directory. Exists only in container. Sets working directory for
-# any RUN, CMD, ENTRYPOINT, COPY, and ADD instructions. Use this instead
-# of 'RUN cd .."
-
-# When we use the -v param when starting the container, the volume will be 
-# mounted to /ds
-WORKDIR /ds/mnt
 VOLUME /ds/mnt
 
+# Copy local vim config
 COPY .vimrc /ds/.vimrc
 WORKDIR /ds/.vim
 COPY .vim . /ds/.vim/
 
-WORKDIR /ds
+WORKDIR /ds/
 
-# Don't prompt y for apt-get
-RUN echo "APT::Get::Assume-Yes \"true\";" >> /etc/apt/apt.conf.d/90forceyes
-RUN apt-get update && apt-get install -y curl git software-properties-common
+# conda
+RUN wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
+RUN bash Anaconda3-2020.11-Linux-x86_64.sh -b && \
+    echo "export PATH="/root/anaconda3/bin:$PATH"" >> ~/.bashrc && \
+    /bin/bash -c "source ~/.bashrc"
+RUN rm Anaconda3-2020.11-Linux-x86_64.sh
+ENV PATH /root/anaconda3/bin:$PATH
+RUN conda install flake8 line_profiler pylint
 
-RUN add-apt-repository -y ppa:jonathonf/vim
-RUN apt update
-RUN apt -y install vim
+# vim
+RUN add-apt-repository -y ppa:jonathonf/vim && \
+    apt update && \
+    apt -y install vim && \
+    curl -sL install-node.now.sh/lts | bash -s -- --yes
 
-RUN curl -sL install-node.now.sh/lts | bash -s -- --yes
-
-# RUN apt-get update --fix-missing && apt-get install -y wget bzip2 ca-certificates \
-#     build-essential \
-#     curl \
-#     htop \
-#     python3-dev \
-#     python-pip \
-#     python-setuptools \
-#     python-virtualenv \
-#     && \
-# apt-get clean && \
-# rm -rf /var/lib/apt/lists/*
-
-# ENV PATH="/root/anaconda3/bin:${PATH}"
-# ARG PATH="/root/anaconda3/bin:${PATH}
-
-# RUN wget \
-# 	https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh \
-#    && mkdir /root/.conda \
-#   && bash Anaconda3-2020.11-Linux-x86_64.sh -b \
-#  && rm -f Anaconda3-2020.11-Linux-x86_64.sh 
-
-# RUN pip --no-cache-dir install --upgrade \
-#         altair \
-#         sklearn-pandas
-
-# Open Ports for Jupyter
+# Open ports for jupyter
 EXPOSE 8888
 
-#Setup File System
+# Setup file system
 ENV SHELL=/bin/bash
+ENV HOME /ds
 
 # Run a shell script
 CMD  ["/bin/bash"]
