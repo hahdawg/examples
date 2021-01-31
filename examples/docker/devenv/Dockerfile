@@ -2,7 +2,8 @@
 # >>> docker build -t <<image name>> -f Dockerfile ./
 #
 # To run:
-# >>> docker run it --name <<container name>> --net=host -v <<host mnt dir>>:<<container mnt dir>>
+# >>> docker run it --name <<container name>> --net=host \
+# >>>   -v <<host mnt dir>>:<<container mnt dir>> <<image name>>
 FROM ubuntu:18.04
 
 # Don't prompt y for apt-get
