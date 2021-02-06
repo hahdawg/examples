@@ -5,8 +5,9 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
-filepath = pathlib.Path(__file__).parent.absolute()
-data_dir = os.path.join(filepath, "data")
+# filepath = pathlib.Path(__file__).parent.absolute()
+# data_dir = os.path.join(filepath, "data")
+data_dir = os.getenv("DATA_DIR")
 data_path = os.path.join(data_dir, "data.csv")
 pred_path = os.path.join(data_dir, "pred.csv")
 
@@ -36,7 +37,6 @@ def predict(X, y):
 
 
 def main():
-    print(os.listdir(filepath))
     X, y = load_data()
     y_hat = predict(X, y)
     y_hat.to_csv(pred_path)
