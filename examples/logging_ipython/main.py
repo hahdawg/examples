@@ -21,7 +21,7 @@ def init_logging():
         "disable_existing_loggers": False,  # Need this in order to get log info from other modules
         'formatters': {
             'standard': {
-                'format': '%(asctime)s [%(levelname)s] {%(name)s:%(lineno)d}: %(message)s'
+                'format': '%(asctime)s %(levelname)-8s [%(name)s:%(lineno)d]: %(message)s'
             },
         },
         "handlers": {
