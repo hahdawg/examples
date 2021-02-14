@@ -1,5 +1,5 @@
 # To build:
-# >>> docker build -t <<image name>> -f Dockerfile ./
+#>>> docker build -t <<image name>> -f Dockerfile ./
 #
 # To run:
 # >>> docker run it --name <<container name>> --net=host \
