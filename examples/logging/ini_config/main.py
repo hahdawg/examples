@@ -6,7 +6,7 @@ from . import util
 
 logger = logging.getLogger(__name__)
 
-util.init_logging()
+util.init_logging_yc()
 
 
 def main():
