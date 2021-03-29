@@ -19,15 +19,22 @@ def init_logging():
     logging_config = {
         "version": 1,
         "disable_existing_loggers": False,  # Need this in order to get log info from other modules
+        'formatters': {
+            'standard': {
+                'format': '%(asctime)s %(levelname)-8s [%(name)s:%(lineno)d]: %(message)s'
+            },
+        },
         "handlers": {
             "console": {
                 "level": "INFO",
-                "class": "logging.StreamHandler"
+                "class": "logging.StreamHandler",
+                "formatter": "standard"
             },
             "file": {
                 "level": "INFO",
                 "class": "logging.FileHandler",
-                "filename": config.log_path
+                "filename": config.log_path,
+                "formatter": "standard"
             }
 
         },

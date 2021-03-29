@@ -1,7 +1,7 @@
 # Packaging Steps
 1. Create source code distribution and wheel.
 ```console
-python3 setup.py sdist bdist_wheel
+python setup.py sdist bdist_wheel
 ```
 2. Install Package
 ```console
