@@ -18,7 +18,7 @@ def make_data(N, K=2):
     fcns = (np.square, np.abs, np.sin, np.cos)
     Z = np.concatenate([f(X) for f in fcns], axis=1)
     Z = (Z - Z.mean(axis=0))/Z.std(axis=0)
-    y = Z.sum(axis=1) + 0.1*np.random.randn(N)
+    y = Z.sum(axis=1) + 0.5*np.random.randn(N)
     return torch.from_numpy(X).float(), torch.from_numpy(y).float()
 
 
@@ -90,8 +90,8 @@ def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
             y_hat = model(Xb)
             loss = loss_fcn(y_hat, yb)
             loss_val.append(loss.cpu().item())
-    loss_val = np.mean(loss_val)
-    tune.report(loss=loss_val)
+    rmse_val = np.sqrt(np.mean(loss_val))
+    tune.report(loss=rmse_val)
 
 
 def main():
