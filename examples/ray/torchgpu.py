@@ -1,9 +1,12 @@
 from collections import deque
 import os
+import multiprocessing as mp
+import pickle
 
 import numpy as np
 import ray
 from ray import tune
+from ray.tune.schedulers import ASHAScheduler
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from sklearn.model_selection import train_test_split
 import torch
@@ -96,9 +99,9 @@ def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
 
 def main():
     N = 1_000_000
-    num_samples = 30
+    num_samples = 60
     batch_size = 512
-    num_epochs = 10
+    num_epochs = 5
     ray.init(
         address="localhost:6379",
         _redis_password=os.getenv("RAY_REDIS_PWD"),
@@ -118,15 +121,16 @@ def main():
         fit, X_tr=X_tr, X_val=X_val, y_tr=y_tr, y_val=y_val,
         batch_size=batch_size, num_epochs=num_epochs
     )
+    scheduler = ASHAScheduler(metric=metric, mode=mode)
     analysis = tune.run(
         objective,
         num_samples=num_samples,
+        scheduler=scheduler,
         search_alg=hp_search,
-        resources_per_trial={"cpu": 8, "gpu": 1},
-        metric=metric,
-        mode=mode
+        resources_per_trial={"cpu": mp.cpu_count() // 2, "gpu": 0.5},
     )
-    print(analysis.best_config)
+    with open("/tmp/analysis.p") as f:
+        pickle.dump(analysis.best_config, f)
 
 
 if __name__ == "__main__":
