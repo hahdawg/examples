@@ -99,9 +99,9 @@ def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
 
 def main():
     N = 1_000_000
-    num_samples = 20
+    num_samples = 10
     batch_size = 512
-    num_epochs = 5
+    num_epochs = 2
     ray.init(
         address="localhost:6379",
         _redis_password=os.getenv("RAY_REDIS_PWD"),
@@ -129,7 +129,7 @@ def main():
         search_alg=hp_search,
         resources_per_trial={"cpu": mp.cpu_count() // 2, "gpu": 0.5},
     )
-    best_config = analysis.best_config
+    best_config = analysis.get_best_config(metric=metric, mode=mode)
     print(best_config)
     with open("/tmp/analysis.p", "wb") as f:
         pickle.dump(analysis, f)
