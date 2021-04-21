@@ -99,7 +99,7 @@ def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
 
 def main():
     N = 1_000_000
-    num_samples = 60
+    num_samples = 20
     batch_size = 512
     num_epochs = 5
     ray.init(
@@ -129,8 +129,10 @@ def main():
         search_alg=hp_search,
         resources_per_trial={"cpu": mp.cpu_count() // 2, "gpu": 0.5},
     )
-    with open("/tmp/analysis.p") as f:
-        pickle.dump(analysis.best_config, f)
+    best_config = analysis.best_config
+    print(best_config)
+    with open("/tmp/analysis.p", "wb") as f:
+        pickle.dump(analysis, f)
 
 
 if __name__ == "__main__":
