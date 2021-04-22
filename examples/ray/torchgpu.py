@@ -1,4 +1,6 @@
 from collections import deque
+import logging
+import logging.config as logcfg
 import os
 import multiprocessing as mp
 import pickle
@@ -14,6 +16,7 @@ from torch import nn
 from torch import optim
 
 LOGGING_INTERVAL = 1000
+logger = logging.getLogger(__name__)
 
 
 def make_data(N, K=2):
@@ -23,6 +26,40 @@ def make_data(N, K=2):
     Z = (Z - Z.mean(axis=0))/Z.std(axis=0)
     y = Z.sum(axis=1) + 0.5*np.random.randn(N)
     return torch.from_numpy(X).float(), torch.from_numpy(y).float()
+
+
+def init_logging(filename: str) -> None:
+    """
+    Make this a function so we can all it in main and in ipython.
+    """
+    path = os.path.join("/tmp", filename)
+    logging_config = {
+        "version": 1,
+        "disable_existing_loggers": False,  # Need this in order to get log info from other modules
+        'formatters': {
+            'standard': {
+                'format': '%(asctime)s %(levelname)-8s [%(name)s:%(lineno)d]: %(message)s'
+            },
+        },
+        "handlers": {
+            "console": {
+                "level": "INFO",
+                "class": "logging.StreamHandler",
+                "formatter": "standard"
+            },
+            "file": {
+                "level": "INFO",
+                "class": "logging.FileHandler",
+                "filename": path,
+                "formatter": "standard",
+                "mode": "a"
+            }
+        },
+        "loggers": {
+            "": {"handlers": ["console", "file"], "level": "INFO"}
+        }
+    }
+    logcfg.dictConfig(logging_config)
 
 
 class FF(nn.Module):
@@ -52,11 +89,13 @@ def batch_generator(X, y, batch_size, num_epochs):
 
 
 def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
+    init_logging("log.log")
+    logger_worker = logging.getLogger("__name__")
     width = params["width"]
     depth = params["depth"]
     lr = params["lr"]
     bg_tr = batch_generator(X_tr, y_tr, batch_size, num_epochs)
-    device = "cuda"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = FF(
         input_dim=X_tr.shape[1],
@@ -82,7 +121,7 @@ def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
             if not step % LOGGING_INTERVAL:
                 logging_loss = np.mean(loss_tr)
                 msg = f"[step {step}]: loss: {logging_loss:0.5f}"
-                print(msg)
+                logger_worker.info(msg)
 
     bg_val = batch_generator(X_val, y_val, batch_size, 1)
     loss_val = []
@@ -98,6 +137,7 @@ def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
 
 
 def main():
+    logger.info("Running main ...")
     N = 1_000_000
     num_samples = 10
     batch_size = 512
@@ -122,15 +162,17 @@ def main():
         batch_size=batch_size, num_epochs=num_epochs
     )
     scheduler = ASHAScheduler(metric=metric, mode=mode)
+    logger.info("Starting hyperparameter search ...")
     analysis = tune.run(
         objective,
         num_samples=num_samples,
         scheduler=scheduler,
         search_alg=hp_search,
-        resources_per_trial={"cpu": mp.cpu_count() // 2, "gpu": 0.5},
+        # resources_per_trial={"cpu": mp.cpu_count() // 2, "gpu": 0.5},
+        resources_per_trial={"cpu": mp.cpu_count() // 2},
     )
     best_config = analysis.get_best_config(metric=metric, mode=mode)
-    print(best_config)
+    logger.info("Best config:\n%s", best_config)
     with open("/tmp/analysis.p", "wb") as f:
         pickle.dump(analysis, f)
 
