@@ -2,14 +2,14 @@ from collections import deque
 import logging
 import logging.config as logcfg
 import os
-import multiprocessing as mp
+# import multiprocessing as mp
 import pickle
 from pprint import pformat
 
 import numpy as np
 import ray
 from ray import tune
-from ray.tune.schedulers import ASHAScheduler
+# from ray.tune.schedulers import ASHAScheduler
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from sklearn.model_selection import train_test_split
 import torch
@@ -184,6 +184,7 @@ def main(
     with open("/tmp/analysis.p", "wb") as f:
         pickle.dump(analysis, f)
     logger.info("Best results %s", pformat(analysis.results))
+    analysis.results_df.to_parquet("/tmp/results.parquet")
     return analysis
 
 
