@@ -4,6 +4,7 @@ import logging.config as logcfg
 import os
 import multiprocessing as mp
 import pickle
+from pprint import pformat
 
 import numpy as np
 import ray
@@ -28,7 +29,7 @@ def make_data(N, K=2):
     return torch.from_numpy(X).float(), torch.from_numpy(y).float()
 
 
-def init_logging(filename: str) -> None:
+def init_logging(filename: str, logger_name: str = "") -> None:
     """
     Make this a function so we can all it in main and in ipython.
     """
@@ -56,7 +57,7 @@ def init_logging(filename: str) -> None:
             }
         },
         "loggers": {
-            "": {"handlers": ["console", "file"], "level": "INFO"}
+            logger_name: {"handlers": ["console", "file"], "level": "INFO"}
         }
     }
     logcfg.dictConfig(logging_config)
@@ -89,7 +90,7 @@ def batch_generator(X, y, batch_size, num_epochs):
 
 
 def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
-    init_logging("log.log")
+    init_logging("fit.log", f"{__name__}.fit")
     logger_worker = logging.getLogger("__name__")
     width = params["width"]
     depth = params["depth"]
@@ -136,17 +137,23 @@ def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
     tune.report(loss=rmse_val)
 
 
-def main():
+def main(
+    distributed: bool,
+    num_samples: int = 5,
+    batch_size: int = 512,
+    num_epochs: int = 1
+):
+    init_logging("main.log")
     logger.info("Running main ...")
     N = 1_000_000
-    num_samples = 10
-    batch_size = 512
-    num_epochs = 2
-    ray.init(
-        address="localhost:6379",
-        _redis_password=os.getenv("RAY_REDIS_PWD"),
-        ignore_reinit_error=True
-    )
+    if distributed:
+        ray.init(
+            address="localhost:6379",
+            _redis_password=os.getenv("RAY_REDIS_PWD"),
+            ignore_reinit_error=True
+        )
+    else:
+        ray.init(ignore_reinit_error=True)
     X, y = make_data(N)
     X_tr, X_val, y_tr, y_val = train_test_split(X, y, test_size=0.2)
     metric = "loss"
@@ -156,26 +163,29 @@ def main():
         "depth": tune.choice(range(1, 5)),
         "lr": tune.loguniform(1e-5, 1e-2)
     }
-    hp_search = HyperOptSearch(param_space, metric=metric, mode=mode)
+    hp_search = HyperOptSearch(metric=metric, mode=mode)
     objective = tune.with_parameters(
         fit, X_tr=X_tr, X_val=X_val, y_tr=y_tr, y_val=y_val,
         batch_size=batch_size, num_epochs=num_epochs
     )
-    scheduler = ASHAScheduler(metric=metric, mode=mode)
+    # scheduler = ASHAScheduler(metric=metric, mode=mode)
     logger.info("Starting hyperparameter search ...")
     analysis = tune.run(
         objective,
         num_samples=num_samples,
-        scheduler=scheduler,
+        config=param_space,
         search_alg=hp_search,
-        # resources_per_trial={"cpu": mp.cpu_count() // 2, "gpu": 0.5},
-        resources_per_trial={"cpu": mp.cpu_count() // 2},
+        resources_per_trial={"cpu": 2, "gpu": 0.5},
+        metric=metric,
+        mode=mode
     )
     best_config = analysis.get_best_config(metric=metric, mode=mode)
     logger.info("Best config:\n%s", best_config)
     with open("/tmp/analysis.p", "wb") as f:
         pickle.dump(analysis, f)
+    logger.info("Best results %s", pformat(analysis.results))
+    return analysis
 
 
 if __name__ == "__main__":
-    main()
+    main(False)
