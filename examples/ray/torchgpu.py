@@ -1,15 +1,16 @@
+import argparse
 from collections import deque
 import logging
 import logging.config as logcfg
 import os
-# import multiprocessing as mp
 import pickle
 from pprint import pformat
+from typing import Generator, Tuple
 
 import numpy as np
+import pandas as pd
 import ray
 from ray import tune
-# from ray.tune.schedulers import ASHAScheduler
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from sklearn.model_selection import train_test_split
 import torch
@@ -17,15 +18,18 @@ from torch import nn
 from torch import optim
 
 LOGGING_INTERVAL = 1000
+LOSS_TARGET = 1.0
+NUM_ROW = 100_000
+RESULTS_PATH = "/tmp/results.parquet"
 logger = logging.getLogger(__name__)
 
 
-def make_data(N, K=2):
+def make_data(N, K=2) -> Tuple[torch.Tensor]:
     X = np.random.randn(N, K)
     fcns = (np.square, np.abs, np.sin, np.cos)
     Z = np.concatenate([f(X) for f in fcns], axis=1)
     Z = (Z - Z.mean(axis=0))/Z.std(axis=0)
-    y = Z.sum(axis=1) + 0.5*np.random.randn(N)
+    y = Z.sum(axis=1) + LOSS_TARGET*np.random.randn(N)
     return torch.from_numpy(X).float(), torch.from_numpy(y).float()
 
 
@@ -65,7 +69,7 @@ def init_logging(filename: str, logger_name: str = "") -> None:
 
 class FF(nn.Module):
 
-    def __init__(self, input_dim, width, depth):
+    def __init__(self, input_dim: int, width: int, depth: int):
         super().__init__()
         widths = [input_dim] + depth*[width]
         self.hidden_layers = nn.ModuleList([
@@ -74,14 +78,14 @@ class FF(nn.Module):
         self.output_layer = nn.Linear(width, 1)
         self.relu = nn.LeakyReLU()
 
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         for layer in self.hidden_layers:
             x = layer(x)
             x = self.relu(x)
         return self.output_layer(x).flatten()
 
 
-def batch_generator(X, y, batch_size, num_epochs):
+def batch_generator(X, y, batch_size, num_epochs) -> Generator:
     for _ in range(num_epochs):
         for i in range(0, X.shape[0], batch_size):
             Xb = X[i:i + batch_size]
@@ -89,7 +93,15 @@ def batch_generator(X, y, batch_size, num_epochs):
             yield Xb, yb
 
 
-def fit(params, batch_size, num_epochs, X_tr, X_val, y_tr, y_val):
+def fit(
+    params: dict,
+    batch_size: int,
+    num_epochs: int,
+    X_tr: torch.Tensor,
+    X_val: torch.Tensor,
+    y_tr: torch.Tensor,
+    y_val: torch.Tensor
+) -> None:
     init_logging("fit.log", f"{__name__}.fit")
     logger_worker = logging.getLogger("__name__")
     width = params["width"]
@@ -142,10 +154,9 @@ def main(
     num_samples: int = 5,
     batch_size: int = 512,
     num_epochs: int = 1
-):
+) -> None:
     init_logging("main.log")
     logger.info("Running main ...")
-    N = 1_000_000
     if distributed:
         ray.init(
             address="localhost:6379",
@@ -154,21 +165,20 @@ def main(
         )
     else:
         ray.init(ignore_reinit_error=True)
-    X, y = make_data(N)
+    X, y = make_data(NUM_ROW)
     X_tr, X_val, y_tr, y_val = train_test_split(X, y, test_size=0.2)
     metric = "loss"
     mode = "min"
     param_space = {
         "width": tune.choice((2**np.arange(5, 11)).astype(int)),
         "depth": tune.choice(range(1, 5)),
-        "lr": tune.loguniform(1e-5, 1e-2)
+        "lr": tune.loguniform(5e-5, 5e-2)
     }
     hp_search = HyperOptSearch(metric=metric, mode=mode)
     objective = tune.with_parameters(
         fit, X_tr=X_tr, X_val=X_val, y_tr=y_tr, y_val=y_val,
         batch_size=batch_size, num_epochs=num_epochs
     )
-    # scheduler = ASHAScheduler(metric=metric, mode=mode)
     logger.info("Starting hyperparameter search ...")
     analysis = tune.run(
         objective,
@@ -184,9 +194,21 @@ def main(
     with open("/tmp/analysis.p", "wb") as f:
         pickle.dump(analysis, f)
     logger.info("Best results %s", pformat(analysis.results))
-    analysis.results_df.to_parquet("/tmp/results.parquet")
-    return analysis
+    analysis.results_df.to_parquet(RESULTS_PATH)
+
+
+def load_results() -> pd.DataFrame:
+    return pd.read_parquet(RESULTS_PATH)
 
 
 if __name__ == "__main__":
-    main(False)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--distributed",
+        dest="distributed",
+        required=True,
+        type=lambda x: (str(x).lower() in ("true", "1", "yes"))
+    )
+    parser.add_argument("--num-samples", dest="num_samples", type=int, required=True)
+    parser.add_argument("--num-epochs", dest="num_epochs", type=int, required=True)
+    main(**vars(parser.parse_args()))
