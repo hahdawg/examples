@@ -24,7 +24,10 @@ RESULTS_PATH = "/tmp/results.parquet"
 logger = logging.getLogger(__name__)
 
 
-def make_data(N, K=2) -> Tuple[torch.Tensor]:
+def make_data(N: int, K: int = 2) -> Tuple[torch.Tensor]:
+    """
+    Make some nonlinear regression data.
+    """
     X = np.random.randn(N, K)
     fcns = (np.square, np.abs, np.sin, np.cos)
     Z = np.concatenate([f(X) for f in fcns], axis=1)
@@ -34,9 +37,6 @@ def make_data(N, K=2) -> Tuple[torch.Tensor]:
 
 
 def init_logging(filename: str, logger_name: str = "") -> None:
-    """
-    Make this a function so we can all it in main and in ipython.
-    """
     path = os.path.join("/tmp", filename)
     logging_config = {
         "version": 1,
@@ -68,7 +68,9 @@ def init_logging(filename: str, logger_name: str = "") -> None:
 
 
 class FF(nn.Module):
-
+    """
+    Standard feed forward network.
+    """
     def __init__(self, input_dim: int, width: int, depth: int):
         super().__init__()
         widths = [input_dim] + depth*[width]
@@ -86,6 +88,9 @@ class FF(nn.Module):
 
 
 def batch_generator(X, y, batch_size, num_epochs) -> Generator:
+    """
+    Standard batch generator.
+    """
     for _ in range(num_epochs):
         for i in range(0, X.shape[0], batch_size):
             Xb = X[i:i + batch_size]
@@ -102,11 +107,18 @@ def fit(
     y_tr: torch.Tensor,
     y_val: torch.Tensor
 ) -> None:
-    init_logging("fit.log", f"{__name__}.fit")
-    logger_worker = logging.getLogger("__name__")
+
+    # NOTE: Initialize logger in function that'll be distributed
+    logger_name = f"{__name__}.fit"
+    init_logging(filename="fit.log", logger_name=logger_name)
+    logger_worker = logging.getLogger(logger_name)
+
+    # NOTE: These are the parameters we're optimizing over
     width = params["width"]
     depth = params["depth"]
     lr = params["lr"]
+
+    # Train the model
     bg_tr = batch_generator(X_tr, y_tr, batch_size, num_epochs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -136,6 +148,7 @@ def fit(
                 msg = f"[step {step}]: loss: {logging_loss:0.5f}"
                 logger_worker.info(msg)
 
+    # Evaluate the model
     bg_val = batch_generator(X_val, y_val, batch_size, 1)
     loss_val = []
     with torch.no_grad():
@@ -146,6 +159,8 @@ def fit(
             loss = loss_fcn(y_hat, yb)
             loss_val.append(loss.cpu().item())
     rmse_val = np.sqrt(np.mean(loss_val))
+
+    # NOTE: This is the only place we're using ray
     tune.report(loss=rmse_val)
 
 
@@ -153,7 +168,7 @@ def main(
     distributed: bool,
     num_samples: int = 5,
     batch_size: int = 512,
-    num_epochs: int = 1
+    num_epochs: int = 10
 ) -> None:
     init_logging("main.log")
     logger.info("Running main ...")
@@ -165,20 +180,28 @@ def main(
         )
     else:
         ray.init(ignore_reinit_error=True)
+
     X, y = make_data(NUM_ROW)
     X_tr, X_val, y_tr, y_val = train_test_split(X, y, test_size=0.2)
+
+    # NOTE: Hyperopt config
     metric = "loss"
     mode = "min"
-    param_space = {
-        "width": tune.choice((2**np.arange(5, 11)).astype(int)),
-        "depth": tune.choice(range(1, 5)),
-        "lr": tune.loguniform(5e-5, 5e-2)
-    }
     hp_search = HyperOptSearch(metric=metric, mode=mode)
+
+    # NOTE: Like functools.partial, but stores data in object store
     objective = tune.with_parameters(
         fit, X_tr=X_tr, X_val=X_val, y_tr=y_tr, y_val=y_val,
         batch_size=batch_size, num_epochs=num_epochs
     )
+
+    # NOTE: Define the support of the parameters we're optimizing over
+    param_space = {
+        "width": tune.choice((2**np.arange(5, 11)).astype(int)),
+        "depth": tune.choice(range(1, 5)),
+        "lr": tune.loguniform(1e-4, 5e-2)
+    }
+
     logger.info("Starting hyperparameter search ...")
     analysis = tune.run(
         objective,

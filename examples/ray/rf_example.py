@@ -14,10 +14,35 @@ def load_model_data() -> Tuple[np.array, np.array]:
     return X, y
 
 
+class RandomForestRegressor:
+
+    def __init__(self, n_estimators: int, max_features: str = "sqrt"):
+        self.n_estimators = n_estimators
+        self.max_features = max_features
+        self._trees: List[DecisionTreeRegressor] = None
+
+    def fit(self, X: np.array, y: np.array) -> None:
+        X_id = ray.put(X)
+        y_id = ray.put(y)
+        self_id = ray.put(self)
+        tasks = [_fit_tree.remote(self_id, X_id, y_id) for _ in range(self.n_estimators)]
+        self._trees = ray.get(tasks)
+
+    def predict_rf(self, X: np.array) -> np.array:
+        X_id = ray.put(X)
+        tasks = [_predict_tree.remote(tree, X_id) for tree in self._trees]
+        pred = ray.get(tasks)
+        pred = np.stack(pred).mean(axis=0)
+        return pred
+
+
 @ray.remote(num_cpus=1)
-def fit_tree(X, y) -> DecisionTreeRegressor:
+def _fit_tree(rf: RandomForestRegressor, X: np.array, y: np.array) -> DecisionTreeRegressor:
     n, k = X.shape
-    num_features = int(np.sqrt(k))
+    if rf.max_features == "sqrt":
+        num_features = int(np.sqrt(k))
+    else:
+        raise RuntimeError()
     feature_idx = np.random.choice(range(k), size=num_features, replace=False)
     row_idx = np.random.choice(range(n), size=n, replace=True)
     X = X[row_idx.reshape(-1, 1), feature_idx]
@@ -28,26 +53,16 @@ def fit_tree(X, y) -> DecisionTreeRegressor:
     return model
 
 
-def fit_rf(X: np.array, y: np.array, n_estimators: int) -> List[DecisionTreeRegressor]:
-    X_id = ray.put(X)
-    y_id = ray.put(y)
-    tasks = [fit_tree.remote(X_id, y_id) for _ in range(n_estimators)]
-    model = ray.get(tasks)
-    return model
-
-
 @ray.remote(num_cpus=1)
-def predict_tree(tree: DecisionTreeRegressor, X: np.array) -> np.array:
+def _predict_tree(tree: DecisionTreeRegressor, X: np.array) -> np.array:
     X = X[:, tree.feature_idx]
     return tree.predict(X)
 
 
-def predict_rf(rf: List[DecisionTreeRegressor], X: np.array) -> np.array:
-    X_id = ray.put(X)
-    tasks = [predict_tree.remote(model, X_id) for model in rf]
-    pred = ray.get(tasks)
-    pred = np.stack(pred).mean(axis=0)
-    return pred
+def compute_metric(model: RandomForestRegressor, X: np.array, y: np.array) -> float:
+    y_hat = model.predict(X)
+    r_sq = r2_score(y_true=y, y_pred=y_hat)
+    return r_sq
 
 
 def main() -> None:
@@ -58,12 +73,11 @@ def main() -> None:
         _redis_password=os.getenv("RAY_REDIS_PWD"),
         ignore_reinit_error=True
     )
-    rf = fit_rf(X_tr, y_tr, 1000)
-    y_tr_hat = predict_rf(rf, X_tr)
-    y_te_hat = predict_rf(rf, X_te)
+    rf = RandomForestRegressor(n_estimators=100)
+    rf.fit(X_tr, y_tr)
     ray.shutdown()
-    r_sq_tr = r2_score(y_true=y_tr, y_pred=y_tr_hat)
-    r_sq_te = r2_score(y_true=y_te, y_pred=y_te_hat)
+    r_sq_tr = compute_metric(rf, X_tr, y_tr)
+    r_sq_te = compute_metric(rf, X_te, y_te)
     print(f"r-square on train set: {r_sq_tr:0.4f}")
     print(f"r-square on test set: {r_sq_te:0.4f}")
 

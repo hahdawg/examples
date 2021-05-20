@@ -21,9 +21,13 @@ class TargetEncoder:
             ignore_reinit_error=True
         )
 
+    @staticmethod
+    def _encoded_name(c):
+        return f"{c}_encoded"
+
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         df = X.copy()
-        df["target"] = y
+        df[self.target_col] = y
         self._init_ray()
         df_id = ray.put(df)
         mappings = ray.get([
@@ -48,16 +52,25 @@ class TargetEncoder:
         return self.transform(X)
 
 
+# pylint: disable=W0212
 @ray.remote
 def _fit_column(te: TargetEncoder, col: str, df: pd.DataFrame) -> Tuple[str, pd.Series]:
+    """
+    NOTE: Remote functions can't be methods.
+    """
     encoded = df.groupby(col)[te.target_col].mean()
     encoded.name = f"{col}_encoded"
+    encoded.name = te._encoded_name(col)
     return col, encoded
 
 
+# pylint: disable=W0212
 @ray.remote
 def _transform_column(te: TargetEncoder, col: str, X: pd.DataFrame) -> pd.Series:
-    merged = X.merge(te.mappings[col], left_on=col, how="left", right_index=True)[f"{col}_encoded"]
+    """
+    NOTE: Remote functions can't be methods.
+    """
+    merged = X.merge(te.mappings[col], left_on=col, how="left", right_index=True)[te._encoded_name(col)]
     merged = merged.fillna(np.nan)
     merged.index = X.index
     return merged
@@ -70,8 +83,8 @@ def main():
     X.columns = X.columns.astype(str)
     y = np.random.randn(N)
     te = TargetEncoder(columns=X.columns)
-    te.fit(X, y)
-    print(te.transform(X))
+    X = te.fit_transform(X, y)
+    print(X)
 
 if __name__ == "__main__":
     main()
