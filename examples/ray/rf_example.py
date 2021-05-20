@@ -1,9 +1,12 @@
+from contextlib import contextmanager
 import os
+import time
 from typing import List, Tuple
 
 import numpy as np
 import ray
 from sklearn.datasets import load_boston
+import sklearn.ensemble as ens
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
@@ -65,7 +68,19 @@ def compute_metric(model: RandomForestRegressor, X: np.array, y: np.array) -> fl
     return r_sq
 
 
+@contextmanager
+def log_time_usage(prefix: str = "") -> None:
+    start = time.time()
+    try:
+        yield
+    finally:
+        end = time.time()
+        elapsed_seconds = float("%.2f" % (end - start))
+        print(f"{prefix}: elapsed seconds: {elapsed_seconds}")
+
+
 def main() -> None:
+    n_estimators = 5000
     X, y = load_model_data()
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42)
     ray.init(
@@ -73,13 +88,26 @@ def main() -> None:
         _redis_password=os.getenv("RAY_REDIS_PWD"),
         ignore_reinit_error=True
     )
-    rf = RandomForestRegressor(n_estimators=100)
-    rf.fit(X_tr, y_tr)
-    ray.shutdown()
+
+    with log_time_usage("distributed"):
+        rf = RandomForestRegressor(n_estimators=n_estimators)
+        rf.fit(X_tr, y_tr)
+        ray.shutdown()
+        r_sq_te = compute_metric(rf, X_te, y_te)
+
     r_sq_tr = compute_metric(rf, X_tr, y_tr)
-    r_sq_te = compute_metric(rf, X_te, y_te)
     print(f"r-square on train set: {r_sq_tr:0.4f}")
-    print(f"r-square on test set: {r_sq_te:0.4f}")
+    print(f"r-square on test set: {r_sq_te:0.4f}\n")
+
+    with log_time_usage("sklearn"):
+        rf = ens.RandomForestRegressor(
+            n_estimators=n_estimators,
+            n_jobs=-1,
+            max_features="sqrt"
+        )
+        rf.fit(X_tr, y_tr)
+        r_sq_te = compute_metric(rf, X_te, y_te)
+    print(f"r-square on train set: {r_sq_tr:0.4f}")
 
 
 if __name__ == "__main__":
