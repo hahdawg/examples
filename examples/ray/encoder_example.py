@@ -57,7 +57,8 @@ def _fit_column(te: TargetEncoder, col: str, df: pd.DataFrame) -> Tuple[str, pd.
 
 @ray.remote
 def _transform_column(te: TargetEncoder, col: str, X: pd.DataFrame) -> pd.Series:
-    merged = X.merge(te.mappings[col], left_on=col, right_index=True)[f"{col}_encoded"]
+    merged = X.merge(te.mappings[col], left_on=col, how="left", right_index=True)[f"{col}_encoded"]
+    merged = merged.fillna(np.nan)
     merged.index = X.index
     return merged
 
