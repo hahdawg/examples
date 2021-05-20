@@ -31,7 +31,7 @@ class RandomForestRegressor:
         tasks = [_fit_tree.remote(self_id, X_id, y_id) for _ in range(self.n_estimators)]
         self._trees = ray.get(tasks)
 
-    def predict_rf(self, X: np.array) -> np.array:
+    def predict(self, X: np.array) -> np.array:
         X_id = ray.put(X)
         tasks = [_predict_tree.remote(tree, X_id) for tree in self._trees]
         pred = ray.get(tasks)
@@ -80,7 +80,7 @@ def log_time_usage(prefix: str = "") -> None:
 
 
 def main() -> None:
-    n_estimators = 5000
+    n_estimators = 1000
     X, y = load_model_data()
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42)
     ray.init(
@@ -92,10 +92,10 @@ def main() -> None:
     with log_time_usage("distributed"):
         rf = RandomForestRegressor(n_estimators=n_estimators)
         rf.fit(X_tr, y_tr)
-        ray.shutdown()
         r_sq_te = compute_metric(rf, X_te, y_te)
 
     r_sq_tr = compute_metric(rf, X_tr, y_tr)
+    ray.shutdown()
     print(f"r-square on train set: {r_sq_tr:0.4f}")
     print(f"r-square on test set: {r_sq_te:0.4f}\n")
 
@@ -107,7 +107,7 @@ def main() -> None:
         )
         rf.fit(X_tr, y_tr)
         r_sq_te = compute_metric(rf, X_te, y_te)
-    print(f"r-square on train set: {r_sq_tr:0.4f}")
+    print(f"r-square on test set: {r_sq_te:0.4f}")
 
 
 if __name__ == "__main__":
