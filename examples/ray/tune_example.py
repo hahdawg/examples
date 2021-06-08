@@ -120,7 +120,7 @@ def fit(
 
     # Train the model
     bg_tr = batch_generator(X_tr, y_tr, batch_size, num_epochs)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda"
 
     model = FF(
         input_dim=X_tr.shape[1],
