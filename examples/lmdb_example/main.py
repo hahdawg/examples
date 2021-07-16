@@ -11,8 +11,8 @@ from tqdm import tqdm
 DB_PATH = "/tmp/mydb"
 
 
-def make_dataset(N=50_000_000):
-    df = pd.DataFrame(np.random.randn(N, 4), columns=list("abcd"))
+def make_dataset(N=1_000_000, K=300):
+    df = pd.DataFrame(np.random.randn(N, K))
     df["y"] = np.random.choice([0, 1], p=[0.95, 0.05], size=N)
     return df
 
