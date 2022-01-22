@@ -20,8 +20,7 @@ def timeit(method):
             name = kw.get('log_name', method.__name__.upper())
             kw['log_time'][name] = int((te - ts) * 1000)
         else:
-            print('%r  %2.2f ms' % \
-                  (method.__name__, (te - ts) * 1000))
+            print('%r  %2.2f ms' % (method.__name__, (te - ts) * 1000))
         return result
     return timed
 
@@ -63,6 +62,7 @@ def process_data_dask():
         df = df.compute()
     return df
 
+
 @timeit
 def process_data_pandas():
     """
@@ -72,9 +72,8 @@ def process_data_pandas():
     df = process_df(df)
     return df
 
+
 def run_example():
-    """
-    """
     make_dataset()
     process_data_dask()
     process_data_pandas()
