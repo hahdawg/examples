@@ -1,10 +1,6 @@
-# To build:
-#>>> docker build -t <<image name>> -f Dockerfile ./
-#
-# To run:
-# >>> docker run it --name <<container name>> --net=host \
-# >>>   -v <<host mnt dir>>:<<container mnt dir>> <<image name>>
 FROM ubuntu:18.04
+
+ARG hm=/home/andrewhah
 
 # Don't prompt y for apt-get
 RUN echo "APT::Get::Assume-Yes \"true\";" >> /etc/apt/apt.conf.d/90forceyes
@@ -23,13 +19,18 @@ RUN apt-get update && apt-get install -y \
     rm -rf /var/lib/apt/lists
 
 # conda
-RUN wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
-RUN bash Anaconda3-2020.11-Linux-x86_64.sh -b && \
-    echo "export PATH="/root/anaconda3/bin:$PATH"" >> ~/.bashrc && \
-    /bin/bash -c "source ~/.bashrc"
-RUN rm Anaconda3-2020.11-Linux-x86_64.sh
-ENV PATH /root/anaconda3/bin:$PATH
-RUN conda install flake8 line_profiler pylint
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh 
+RUN bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda
+RUN rm Miniconda3-latest-Linux-x86_64.sh
+RUN echo "PATH=/opt/conda/bin:$PATH" >> /etc/profile
+ENV PATH /opt/conda/bin:$PATH
+RUN conda install -y python=3.8
+RUN conda config --add channels conda-forge
+RUN conda config --set channel_priority strict
+RUN conda install -y -c conda-forge mamba
+RUN mamba install -y flake8 matplotlib jupyter ipython line_profiler pylint pytest pandas
+RUN mamba install -y -c conda-forge gcsfs google-api-python-client google-cloud-bigquery gpustat \
+    ray-all ray-core ray-dashboard ray-default ray-tune scikit-learn seaborn tqdm jedi
 
 # vim
 RUN add-apt-repository -y ppa:jonathonf/vim && \
@@ -46,20 +47,21 @@ RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
     rm -rf /var/lib/apt/lists
 
 # Copy local vim config
-COPY .vimrc /ds/.vimrc
-RUN curl -fLo /ds/.vim/autoload/plug.vim --create-dirs \
+WORKDIR ${hm}
+COPY .vimrc ${hm}/.vimrc
+RUN curl -fLo ${hm}/.vim/autoload/plug.vim --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+# RUN /usr/bin/vim -E -s -u "${hm}/.vimrc" +PlugInstall +qall
 
-WORKDIR /ds/
-RUN echo '{"python.pythonPath": "/root/anaconda3/bin/python"}' >> /ds/.vim/coc-settings.json
+RUN echo '{"python.pythonPath": "/opt/conda/bin/python"}' >> ${hm}/.vim/coc-settings.json
 
 # Open ports for jupyter
 EXPOSE 8888
 
 # Setup file system
-VOLUME /ds/mnt
+VOLUME ${hm}/mnt
 ENV SHELL=/bin/bash
-ENV HOME /ds
+ENV HOME ${hm}
 
 # Run a shell script
 CMD  ["/bin/bash"]
