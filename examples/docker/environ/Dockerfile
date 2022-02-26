@@ -39,19 +39,25 @@ RUN add-apt-repository -y ppa:jonathonf/vim && \
     curl -sL install-node.now.sh/lts | bash -s -- --yes
 
 # yarn
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
-    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
-    apt update && \
-    apt install -y yarn && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists
+# RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
+#    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
+#    apt update && \
+#    apt install -y yarn && \
+#    apt-get clean && \
+#    rm -rf /var/lib/apt/lists
 
 # Copy local vim config
+RUN useradd -ms /bin/bash andrewhah
+USER andrewhah
+WORKDIR ${hm}
+WORKDIR ${hm}/.config/coc
 WORKDIR ${hm}
 COPY .vimrc ${hm}/.vimrc
 RUN curl -fLo ${hm}/.vim/autoload/plug.vim --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-# RUN /usr/bin/vim -E -s -u "${hm}/.vimrc" +PlugInstall +qall
+# RUN vim -E -s -u "${hm}/.vimrc" +PlugInstall +qall
+RUN vim +'PlugInstall --sync' +qall
+RUN vim -c 'CocInstall -sync coc-python coc-sh|q' +qall
 
 RUN echo '{"python.pythonPath": "/opt/conda/bin/python"}' >> ${hm}/.vim/coc-settings.json
 
