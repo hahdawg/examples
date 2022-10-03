@@ -1,3 +1,4 @@
+# pylint: disable=E1102
 import argparse
 from collections import deque
 import logging
@@ -172,6 +173,7 @@ def main(
 ) -> None:
     init_logging("main.log")
     logger.info("Running main ...")
+    ray.shutdown()
     if distributed:
         ray.init(
             address="localhost:6379",
@@ -199,7 +201,8 @@ def main(
     param_space = {
         "width": tune.choice((2**np.arange(5, 11)).astype(int)),
         "depth": tune.choice(range(1, 5)),
-        "lr": tune.loguniform(1e-4, 5e-2)
+        "lr": tune.loguniform(1e-4, 5e-2),
+        "categorical": tune.choice(["foo", "bar"])
     }
 
     logger.info("Starting hyperparameter search ...")

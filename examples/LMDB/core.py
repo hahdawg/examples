@@ -167,6 +167,7 @@ def make_example():
 
 
 if __name__ == "__main__":
-    bmk = Benchmark(batch_size=10000)
-    bmk.run_sequential_benchmark(num_trials=10)
-    bmk.run_parallel_benchmark(gpu_train_step_seconds=1.0, num_training_steps=60)
+    print("hello")
+    # bmk = Benchmark(batch_size=10000)
+    # bmk.run_sequential_benchmark(num_trials=10)
+    # bmk.run_parallel_benchmark(gpu_train_step_seconds=1.0, num_training_steps=60)
