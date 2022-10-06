@@ -1,15 +1,13 @@
-import os
-import pickle
+"""
+Discouraged tests for cfg, lib, and main code. Normally the tests would live in different modules.
+"""
 from unittest.mock import (
-    create_autospec,
     patch,
     MagicMock
 )
 
 import pytest
 
-import examples.testing.config as cfg
-import examples.testing.lib as lib
 import examples.testing.main as m
 
 
@@ -56,5 +54,3 @@ def test_query_db_patch_with_autospec(mock_query_db):
     mock_query_db("foo")
     mock_query_db.assert_called_with("foo")
     mock_query_db.assert_called_once()
-
-

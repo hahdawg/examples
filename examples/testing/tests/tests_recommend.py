@@ -1,5 +1,5 @@
 """
-Tests for cfg, lib, and main code. Normally the tests would live in different modules.
+Recommended tests for cfg, lib, and main code. Normally the tests would live in different modules.
 """
 import os
 import pickle
