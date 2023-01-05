@@ -21,7 +21,7 @@ fi
 ## Have a useful prompt
 In bashrc, append the following lines to show git branch and conda env in prompt.
 
-```
+```bash
 # Load Git functions
 source ~/.git-prompt.sh
 
